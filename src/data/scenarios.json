@@ -1,0 +1,122 @@
+[
+  {
+    "id": "grocery_shopping",
+    "titleZh": "超市购物",
+    "descriptionZh": "你去超市买这周的食材",
+    "category": "daily",
+    "level": "beginner",
+    "estimatedMinutes": 5,
+    "aiRole": "cashier",
+    "aiRoleDescription": "You are a friendly cashier at a Shoprite supermarket in South Africa."
+  },
+  {
+    "id": "restaurant",
+    "titleZh": "餐厅点餐",
+    "descriptionZh": "你在餐厅点午餐",
+    "category": "daily",
+    "level": "beginner",
+    "estimatedMinutes": 5,
+    "aiRole": "waiter",
+    "aiRoleDescription": "You are a waiter at a popular restaurant in Cape Town."
+  },
+  {
+    "id": "pharmacy",
+    "titleZh": "药房买药",
+    "descriptionZh": "你感冒了，去药房买药",
+    "category": "daily",
+    "level": "beginner",
+    "estimatedMinutes": 5,
+    "aiRole": "pharmacist",
+    "aiRoleDescription": "You are a pharmacist at a Dis-Chem pharmacy in South Africa."
+  },
+  {
+    "id": "asking_directions",
+    "titleZh": "问路",
+    "descriptionZh": "你在街上迷路了，需要问路",
+    "category": "daily",
+    "level": "beginner",
+    "estimatedMinutes": 3,
+    "aiRole": "passerby",
+    "aiRoleDescription": "You are a friendly South African passerby on the street."
+  },
+  {
+    "id": "bank_account",
+    "titleZh": "银行开户",
+    "descriptionZh": "你去银行开一个新账户",
+    "category": "services",
+    "level": "intermediate",
+    "estimatedMinutes": 8,
+    "aiRole": "bank teller",
+    "aiRoleDescription": "You are a bank teller at FNB (First National Bank) in South Africa."
+  },
+  {
+    "id": "utility_bills",
+    "titleZh": "水电缴费",
+    "descriptionZh": "你去缴纳水电费",
+    "category": "services",
+    "level": "intermediate",
+    "estimatedMinutes": 5,
+    "aiRole": "clerk",
+    "aiRoleDescription": "You are a municipal office clerk handling utility payments in South Africa."
+  },
+  {
+    "id": "renting",
+    "titleZh": "租房签约",
+    "descriptionZh": "你和房东讨论租房合同",
+    "category": "services",
+    "level": "intermediate",
+    "estimatedMinutes": 10,
+    "aiRole": "landlord",
+    "aiRoleDescription": "You are a South African landlord showing a flat and discussing the lease."
+  },
+  {
+    "id": "car_repair",
+    "titleZh": "车辆维修",
+    "descriptionZh": "你的车出了问题，去修车店",
+    "category": "services",
+    "level": "intermediate",
+    "estimatedMinutes": 7,
+    "aiRole": "mechanic",
+    "aiRoleDescription": "You are a mechanic at a car workshop in Johannesburg."
+  },
+  {
+    "id": "neighbor_chat",
+    "titleZh": "邻居闲聊",
+    "descriptionZh": "周末在小区遇到邻居闲聊",
+    "category": "social",
+    "level": "beginner",
+    "estimatedMinutes": 5,
+    "aiRole": "neighbor",
+    "aiRoleDescription": "You are a friendly South African neighbor having a weekend chat."
+  },
+  {
+    "id": "school_meeting",
+    "titleZh": "家长会",
+    "descriptionZh": "去孩子学校参加家长会",
+    "category": "social",
+    "level": "intermediate",
+    "estimatedMinutes": 8,
+    "aiRole": "teacher",
+    "aiRoleDescription": "You are a primary school teacher in South Africa meeting a parent."
+  },
+  {
+    "id": "braai_party",
+    "titleZh": "BBQ聚会",
+    "descriptionZh": "参加南非式BBQ（Braai）聚会",
+    "category": "social",
+    "level": "fluent",
+    "estimatedMinutes": 10,
+    "aiRole": "host",
+    "aiRoleDescription": "You are hosting a braai (South African BBQ) and chatting with guests. Use casual South African English and slang."
+  },
+  {
+    "id": "free_chat",
+    "titleZh": "自由对话",
+    "descriptionZh": "随便聊，不限主题",
+    "category": "free",
+    "level": "beginner",
+    "estimatedMinutes": 0,
+    "aiRole": "friend",
+    "aiRoleDescription": "You are a friendly South African having a casual conversation about anything."
+  }
+]
