@@ -5,6 +5,7 @@ import { LEVEL_DISPLAY } from '../../types'
 import { db } from '../../db/database'
 import { useSettings } from '../../store/useSettings'
 import { filterDue } from '../../services/reviewScheduler'
+import { unlockAudio } from '../../services/ttsService'
 
 const scenarios = scenariosData as Scenario[]
 
@@ -49,7 +50,10 @@ export function HomeView({ onStartScenario, onStartFreeChat, onOpenSentenceBook 
               <span className="text-blue-500">{LEVEL_DISPLAY[settings.userLevel]}</span>
             </div>
             <button
-              onClick={() => onStartScenario(todayScenario)}
+              onClick={() => {
+                unlockAudio()
+                onStartScenario(todayScenario)
+              }}
               className="w-full py-3 bg-blue-500 text-white rounded-xl font-medium"
             >
               开始练习
@@ -73,7 +77,10 @@ export function HomeView({ onStartScenario, onStartFreeChat, onOpenSentenceBook 
         </div>
 
         <button
-          onClick={onStartFreeChat}
+          onClick={() => {
+            unlockAudio()
+            onStartFreeChat()
+          }}
           className="w-full p-4 bg-gray-100 rounded-xl font-medium flex items-center justify-center gap-2 active:bg-gray-200"
         >
           🎤 自由对话

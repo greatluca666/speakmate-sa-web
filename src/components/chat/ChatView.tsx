@@ -12,7 +12,7 @@ import { db } from '../../db/database'
 import { useSettings } from '../../store/useSettings'
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
 import { buildSystemPrompt, sendChatMessage } from '../../services/chatService'
-import { synthesizeAndPlay } from '../../services/ttsService'
+import { synthesizeAndPlay, unlockAudio } from '../../services/ttsService'
 import { MessageBubble } from './MessageBubble'
 import { RecordButton } from './RecordButton'
 
@@ -224,7 +224,10 @@ export function ChatView({ scenario, onExit }: Props) {
         <RecordButton
           isRecording={speech.isRecording}
           disabled={!speech.isSupported || isLoading}
-          onStart={speech.start}
+          onStart={() => {
+            unlockAudio()
+            speech.start()
+          }}
           onStop={handleStopRecording}
         />
       </div>

@@ -66,6 +66,37 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
+let sharedAudio: HTMLAudioElement | null = null
+let audioUnlocked = false
+
+const SILENT_WAV =
+  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
+
+export function unlockAudio(): void {
+  if (audioUnlocked) return
+  try {
+    if (!sharedAudio) {
+      sharedAudio = new Audio()
+      sharedAudio.preload = 'auto'
+    }
+    sharedAudio.src = SILENT_WAV
+    const playResult = sharedAudio.play()
+    if (playResult && typeof playResult.then === 'function') {
+      playResult
+        .then(() => {
+          audioUnlocked = true
+        })
+        .catch(() => {
+          audioUnlocked = false
+        })
+    } else {
+      audioUnlocked = true
+    }
+  } catch {
+    audioUnlocked = false
+  }
+}
+
 export async function synthesizeAndPlay(text: string, voiceName: string): Promise<void> {
   const key = hashText(`${voiceName}|${text}`)
   const cached = getCachedDataUrl(key)
@@ -93,9 +124,14 @@ export async function synthesizeAndPlay(text: string, voiceName: string): Promis
 
 function playUrl(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const audio = new Audio(url)
+    if (!sharedAudio) {
+      sharedAudio = new Audio()
+      sharedAudio.preload = 'auto'
+    }
+    const audio = sharedAudio
     audio.onended = () => resolve()
     audio.onerror = () => reject(new Error('Audio playback failed'))
+    audio.src = url
     audio.play().catch(reject)
   })
 }

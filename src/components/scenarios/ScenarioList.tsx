@@ -2,6 +2,7 @@ import { useState } from 'react'
 import scenariosData from '../../data/scenarios.json'
 import type { Scenario, ScenarioCategory } from '../../types'
 import { LEVEL_DISPLAY, CATEGORY_DISPLAY } from '../../types'
+import { unlockAudio } from '../../services/ttsService'
 
 const scenarios = scenariosData as Scenario[]
 
@@ -33,7 +34,10 @@ export function ScenarioList({ onSelect }: Props) {
         {list.map((s) => (
           <button
             key={s.id}
-            onClick={() => onSelect(s)}
+            onClick={() => {
+              unlockAudio()
+              onSelect(s)
+            }}
             className="w-full text-left p-4 bg-gray-100 rounded-xl active:bg-gray-200"
           >
             <div className="font-semibold">{s.titleZh}</div>

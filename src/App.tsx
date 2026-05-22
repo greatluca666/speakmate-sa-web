@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Scenario } from './types'
+import { unlockAudio } from './services/ttsService'
 import { HomeView } from './components/home/HomeView'
 import { ScenarioList } from './components/scenarios/ScenarioList'
 import { ChatView } from './components/chat/ChatView'
@@ -48,7 +49,10 @@ function App() {
           label="对话"
           icon="🎤"
           active={false}
-          onClick={() => setChat({ scenario: null })}
+          onClick={() => {
+            unlockAudio()
+            setChat({ scenario: null })
+          }}
         />
         <TabBtn label="句子本" icon="📖" active={tab === 'sentence'} onClick={() => setTab('sentence')} />
         <TabBtn label="我的" icon="👤" active={tab === 'profile'} onClick={() => setTab('profile')} />
