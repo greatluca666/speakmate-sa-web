@@ -51,6 +51,28 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico'],
+      workbox: {
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
+        globIgnores: ['**/*.wasm', '**/*.onnx'],
+        runtimeCaching: [
+          {
+            urlPattern: /\.(?:wasm|onnx)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'ml-assets',
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/huggingface\.co\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'hf-models',
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 }
+            }
+          }
+        ]
+      },
       manifest: {
         name: 'SpeakMate SA',
         short_name: 'SpeakMate',

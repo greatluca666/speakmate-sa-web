@@ -211,8 +211,10 @@ export function ChatView({ scenario, onExit }: Props) {
           <div className="text-red-500 text-xs p-2 bg-red-50 rounded">{error}</div>
         )}
         {speech.isProcessing && (
-          <div className="text-right text-sm text-gray-400 italic">
-            正在识别...
+          <div className="text-right text-sm text-gray-500 italic">
+            {speech.modelLoadingProgress > 0 && speech.modelLoadingProgress < 100
+              ? `首次加载语音识别模型 ${speech.modelLoadingProgress}%...`
+              : '正在识别...'}
           </div>
         )}
         {speech.transcript && speech.isRecording && (

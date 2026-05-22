@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSettings } from '../store/useSettings'
-import { whisperTranscribe } from '../services/whisperService'
+import { transcribeLocal, getLocalWhisperStatus } from '../services/localWhisper'
 
 interface UseSpeechRecognitionResult {
   transcript: string
   isRecording: boolean
   isProcessing: boolean
   isSupported: boolean
+  modelLoadingProgress: number
   error: string | null
   start: () => Promise<void>
   stop: () => Promise<string>
@@ -48,10 +48,12 @@ async function ensureMicStream(): Promise<MediaStream> {
 }
 
 export function useSpeechRecognition(): UseSpeechRecognitionResult {
-  const settings = useSettings()
   const [transcript, setTranscript] = useState('')
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [modelLoadingProgress, setModelLoadingProgress] = useState(
+    () => getLocalWhisperStatus().progress
+  )
   const [error, setError] = useState<string | null>(null)
 
   const recognitionRef = useRef<any>(null)
@@ -160,11 +162,6 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     setTranscript('')
     transcriptRef.current = ''
 
-    if (!settings.apiBase || !settings.apiKey) {
-      setError('请先在"我的"里配置 API 才能用语音识别')
-      return
-    }
-
     let stream: MediaStream
     try {
       stream = await ensureMicStream()
@@ -209,11 +206,9 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
 
       setIsProcessing(true)
       try {
-        const text = await whisperTranscribe(
-          blob,
-          settings.apiBase,
-          settings.apiKey
-        )
+        const text = await transcribeLocal(blob, (pct) => {
+          setModelLoadingProgress(pct)
+        })
         transcriptRef.current = text
         setTranscript(text)
         finalResolveRef.current?.(text)
@@ -288,6 +283,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     isRecording,
     isProcessing,
     isSupported,
+    modelLoadingProgress,
     error,
     start,
     stop,
