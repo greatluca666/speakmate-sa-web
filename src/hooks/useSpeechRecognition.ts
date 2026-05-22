@@ -5,7 +5,7 @@ interface UseSpeechRecognitionResult {
   isRecording: boolean
   isSupported: boolean
   error: string | null
-  start: () => void
+  start: () => Promise<void>
   stop: () => void
   reset: () => void
 }
@@ -15,6 +15,19 @@ declare global {
     SpeechRecognition?: any
     webkitSpeechRecognition?: any
   }
+}
+
+const isIOS =
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1))
+
+async function ensureMicPermission(): Promise<void> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('getUserMedia not available (need HTTPS)')
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  stream.getTracks().forEach((t) => t.stop())
 }
 
 export function useSpeechRecognition(): UseSpeechRecognitionResult {
@@ -42,7 +55,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     }
   }, [])
 
-  const start = () => {
+  const start = async () => {
     if (!Ctor) {
       setError('浏览器不支持语音识别')
       return
@@ -51,10 +64,18 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     setTranscript('')
     transcriptRef.current = ''
 
+    try {
+      await ensureMicPermission()
+    } catch (e: any) {
+      setError('麦克风权限被拒绝: ' + (e?.message || 'unknown'))
+      return
+    }
+
     const recognition = new Ctor()
     recognition.lang = 'en-ZA'
-    recognition.continuous = true
+    recognition.continuous = !isIOS
     recognition.interimResults = true
+    recognition.maxAlternatives = 1
 
     recognition.onresult = (event: any) => {
       let interim = ''
@@ -72,7 +93,12 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     }
 
     recognition.onerror = (event: any) => {
-      setError(event.error || '识别失败')
+      const err = event.error || '识别失败'
+      if (err === 'no-speech' || err === 'aborted') {
+        setIsRecording(false)
+        return
+      }
+      setError(err)
       setIsRecording(false)
     }
 
