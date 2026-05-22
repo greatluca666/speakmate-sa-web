@@ -150,9 +150,11 @@ export function ChatView({ scenario, onExit }: Props) {
   }
 
   async function handleStopRecording() {
-    speech.stop()
-    const text = speech.transcript.trim()
-    if (!text || !conversationId) return
+    const text = (await speech.stop()).trim()
+    if (!text || !conversationId) {
+      speech.reset()
+      return
+    }
     await db.messages.add({
       conversationId,
       role: 'user',
@@ -208,6 +210,11 @@ export function ChatView({ scenario, onExit }: Props) {
         {error && (
           <div className="text-red-500 text-xs p-2 bg-red-50 rounded">{error}</div>
         )}
+        {speech.isProcessing && (
+          <div className="text-right text-sm text-gray-400 italic">
+            正在识别...
+          </div>
+        )}
         {speech.transcript && speech.isRecording && (
           <div className="text-right text-sm text-gray-400 italic">
             {speech.transcript}
@@ -223,7 +230,7 @@ export function ChatView({ scenario, onExit }: Props) {
         )}
         <RecordButton
           isRecording={speech.isRecording}
-          disabled={!speech.isSupported || isLoading}
+          disabled={!speech.isSupported || isLoading || speech.isProcessing}
           onStart={() => {
             unlockAudio()
             speech.start()

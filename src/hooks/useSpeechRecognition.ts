@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSettings } from '../store/useSettings'
+import { whisperTranscribe } from '../services/whisperService'
 
 interface UseSpeechRecognitionResult {
   transcript: string
   isRecording: boolean
+  isProcessing: boolean
   isSupported: boolean
   error: string | null
   start: () => Promise<void>
-  stop: () => void
+  stop: () => Promise<string>
   reset: () => void
 }
 
@@ -22,58 +25,87 @@ const isIOS =
   (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1))
 
-async function ensureMicPermission(): Promise<void> {
+function pickMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined') return undefined
+  const candidates = [
+    'audio/mp4',
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus'
+  ]
+  for (const t of candidates) {
+    if (MediaRecorder.isTypeSupported(t)) return t
+  }
+  return undefined
+}
+
+async function ensureMicStream(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('getUserMedia not available (need HTTPS)')
   }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  stream.getTracks().forEach((t) => t.stop())
+  return navigator.mediaDevices.getUserMedia({ audio: true })
 }
 
 export function useSpeechRecognition(): UseSpeechRecognitionResult {
+  const settings = useSettings()
   const [transcript, setTranscript] = useState('')
   const [isRecording, setIsRecording] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
   const recognitionRef = useRef<any>(null)
   const transcriptRef = useRef('')
+  const finalResolveRef = useRef<((text: string) => void) | null>(null)
 
-  const Ctor =
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+
+  const useWhisper = isIOS
+
+  const WebSpeechCtor =
     typeof window !== 'undefined'
       ? window.SpeechRecognition || window.webkitSpeechRecognition
       : undefined
-  const isSupported = !!Ctor
+  const webSpeechSupported = !!WebSpeechCtor
+  const mediaRecorderSupported = typeof MediaRecorder !== 'undefined'
+  const isSupported = useWhisper ? mediaRecorderSupported : webSpeechSupported
 
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop()
-        } catch {
-          // ignore
-        }
+      try {
+        recognitionRef.current?.stop()
+      } catch {
+        // ignore
       }
+      try {
+        if (recorderRef.current?.state === 'recording') {
+          recorderRef.current.stop()
+        }
+      } catch {
+        // ignore
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop())
     }
   }, [])
 
-  const start = async () => {
-    if (!Ctor) {
-      setError('浏览器不支持语音识别')
-      return
-    }
+  async function startWebSpeech() {
     setError(null)
     setTranscript('')
     transcriptRef.current = ''
 
     try {
-      await ensureMicPermission()
+      const probe = await ensureMicStream()
+      probe.getTracks().forEach((t) => t.stop())
     } catch (e: any) {
       setError('麦克风权限被拒绝: ' + (e?.message || 'unknown'))
       return
     }
 
-    const recognition = new Ctor()
+    const recognition = new WebSpeechCtor()
     recognition.lang = 'en-ZA'
-    recognition.continuous = !isIOS
+    recognition.continuous = true
     recognition.interimResults = true
     recognition.maxAlternatives = 1
 
@@ -96,15 +128,21 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
       const err = event.error || '识别失败'
       if (err === 'no-speech' || err === 'aborted') {
         setIsRecording(false)
+        finalResolveRef.current?.(transcriptRef.current)
+        finalResolveRef.current = null
         return
       }
       setError(err)
       setIsRecording(false)
+      finalResolveRef.current?.(transcriptRef.current)
+      finalResolveRef.current = null
     }
 
     recognition.onend = () => {
       setIsRecording(false)
       setTranscript(transcriptRef.current)
+      finalResolveRef.current?.(transcriptRef.current)
+      finalResolveRef.current = null
     }
 
     try {
@@ -117,21 +155,142 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     }
   }
 
-  const stop = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop()
-      } catch {
-        // ignore
+  async function startWhisper() {
+    setError(null)
+    setTranscript('')
+    transcriptRef.current = ''
+
+    if (!settings.apiBase || !settings.apiKey) {
+      setError('请先在"我的"里配置 API 才能用语音识别')
+      return
+    }
+
+    let stream: MediaStream
+    try {
+      stream = await ensureMicStream()
+    } catch (e: any) {
+      setError('麦克风权限被拒绝: ' + (e?.message || 'unknown'))
+      return
+    }
+    streamRef.current = stream
+
+    const mimeType = pickMimeType()
+    let recorder: MediaRecorder
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
+    } catch (e: any) {
+      stream.getTracks().forEach((t) => t.stop())
+      setError('无法创建录音器: ' + (e?.message || 'unknown'))
+      return
+    }
+
+    chunksRef.current = []
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+    }
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+
+      const blob = new Blob(chunksRef.current, {
+        type: recorder.mimeType || 'audio/webm'
+      })
+      chunksRef.current = []
+
+      if (blob.size < 200) {
+        setIsRecording(false)
+        finalResolveRef.current?.('')
+        finalResolveRef.current = null
+        return
       }
+
+      setIsProcessing(true)
+      try {
+        const text = await whisperTranscribe(
+          blob,
+          settings.apiBase,
+          settings.apiKey
+        )
+        transcriptRef.current = text
+        setTranscript(text)
+        finalResolveRef.current?.(text)
+      } catch (e: any) {
+        setError('识别失败: ' + (e?.message || 'unknown'))
+        finalResolveRef.current?.('')
+      } finally {
+        finalResolveRef.current = null
+        setIsRecording(false)
+        setIsProcessing(false)
+      }
+    }
+
+    try {
+      recorder.start()
+      recorderRef.current = recorder
+      setIsRecording(true)
+    } catch (e: any) {
+      stream.getTracks().forEach((t) => t.stop())
+      setError(e?.message || '启动录音失败')
     }
   }
 
-  const reset = () => {
+  async function start() {
+    if (useWhisper) {
+      await startWhisper()
+    } else {
+      await startWebSpeech()
+    }
+  }
+
+  function stop(): Promise<string> {
+    return new Promise((resolve) => {
+      finalResolveRef.current = resolve
+
+      if (useWhisper) {
+        if (recorderRef.current && recorderRef.current.state === 'recording') {
+          try {
+            recorderRef.current.stop()
+          } catch {
+            resolve(transcriptRef.current)
+            finalResolveRef.current = null
+          }
+        } else {
+          resolve(transcriptRef.current)
+          finalResolveRef.current = null
+        }
+      } else {
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.stop()
+          } catch {
+            resolve(transcriptRef.current)
+            finalResolveRef.current = null
+          }
+        } else {
+          resolve(transcriptRef.current)
+          finalResolveRef.current = null
+        }
+      }
+    })
+  }
+
+  function reset() {
     setTranscript('')
     transcriptRef.current = ''
     setError(null)
   }
 
-  return { transcript, isRecording, isSupported, error, start, stop, reset }
+  return {
+    transcript,
+    isRecording,
+    isProcessing,
+    isSupported,
+    error,
+    start,
+    stop,
+    reset
+  }
 }
