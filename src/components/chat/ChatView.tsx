@@ -15,6 +15,7 @@ import { buildSystemPrompt, sendChatMessage } from '../../services/chatService'
 import { synthesizeAndPlay, unlockAudio } from '../../services/ttsService'
 import { MessageBubble } from './MessageBubble'
 import { RecordButton } from './RecordButton'
+import { DebugPanel } from '../DebugPanel'
 
 interface Props {
   scenario: Scenario | null
@@ -240,6 +241,9 @@ export function ChatView({ scenario, onExit }: Props) {
           onStop={handleStopRecording}
         />
       </div>
+      
+      {/* 调试面板 */}
+      <DebugPanel />
     </div>
   )
 }

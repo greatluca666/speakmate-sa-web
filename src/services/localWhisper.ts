@@ -19,8 +19,10 @@ async function getWhisperPipeline(
 ): Promise<Pipeline> {
   if (pipelinePromise) return pipelinePromise
   loadStatus = 'loading'
+  console.log('[Whisper Model] Starting to load model...')
   pipelinePromise = (async () => {
     const transformers: any = await import('@huggingface/transformers')
+    console.log('[Whisper Model] Transformers library loaded')
     transformers.env.allowRemoteModels = true
     transformers.env.useBrowserCache = true
 
@@ -40,6 +42,7 @@ async function getWhisperPipeline(
     loadStatus = 'ready'
     loadProgress = 100
     onProgress?.(100)
+    console.log('[Whisper Model] Model loaded successfully')
     return pipe
   })().catch((e) => {
     loadStatus = 'error'
@@ -94,18 +97,23 @@ export async function transcribeLocal(
   audio: Blob,
   onProgress?: (pct: number) => void
 ): Promise<string> {
+  console.log('[Whisper Model] transcribeLocal called, blob size:', audio.size, 'type:', audio.type)
   const pipe = await getWhisperPipeline(onProgress)
+  console.log('[Whisper Model] Converting audio to samples...')
   const samples = await blobToFloat32Mono16k(audio)
+  console.log('[Whisper Model] Samples length:', samples.length, 'duration:', samples.length / 16000, 'seconds')
   
   // 降低最小长度要求,避免丢失短语音
   if (samples.length < 16000 * 0.1) return ''
   
+  console.log('[Whisper Model] Starting transcription with pipe...')
   const result = await pipe(samples, {
     chunk_length_s: 30,
     return_timestamps: false,
     // 添加语言提示提高准确率
     language: 'english'
   })
+  console.log('[Whisper Model] Transcription complete, result:', result)
   
   if (Array.isArray(result)) {
     return result.map((r: any) => r.text || '').join(' ').trim()

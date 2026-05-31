@@ -159,6 +159,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
   }
 
   async function startWhisper() {
+    console.log('[Whisper] Starting recording...')
     setError(null)
     setTranscript('')
     transcriptRef.current = ''
@@ -167,18 +168,22 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     let stream: MediaStream
     try {
       stream = await ensureMicStream()
+      console.log('[Whisper] Microphone stream obtained')
     } catch (e: any) {
+      console.error('[Whisper] Microphone error:', e)
       setError('麦克风权限被拒绝: ' + (e?.message || 'unknown'))
       return
     }
     streamRef.current = stream
 
     const mimeType = pickMimeType()
+    console.log('[Whisper] Selected mimeType:', mimeType)
     let recorder: MediaRecorder
     try {
       recorder = mimeType
         ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream)
+      console.log('[Whisper] MediaRecorder created, actual mimeType:', recorder.mimeType)
     } catch (e: any) {
       stream.getTracks().forEach((t) => t.stop())
       setError('无法创建录音器: ' + (e?.message || 'unknown'))
@@ -191,12 +196,14 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     }
 
     recorder.onstop = async () => {
+      console.log('[Whisper] Recording stopped, chunks:', chunksRef.current.length)
       stream.getTracks().forEach((t) => t.stop())
       streamRef.current = null
 
       const blob = new Blob(chunksRef.current, {
         type: recorder.mimeType || 'audio/webm'
       })
+      console.log('[Whisper] Blob created, size:', blob.size, 'type:', blob.type)
       chunksRef.current = []
 
       if (blob.size < 200) {
@@ -210,10 +217,13 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
 
       setIsRecording(false)
       setIsProcessing(true)
+      console.log('[Whisper] Starting transcription...')
       try {
         const text = await transcribeLocal(blob, (pct) => {
+          console.log('[Whisper] Transcription progress:', pct + '%')
           setModelLoadingProgress(pct)
         })
+        console.log('[Whisper] Transcription result:', text)
         transcriptRef.current = text
         setTranscript(text)
 
@@ -221,6 +231,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
         finalResolveRef.current = null
         resolve?.(text)
       } catch (e: any) {
+        console.error('[Whisper] Transcription error:', e)
         setError('识别失败: ' + (e?.message || 'unknown'))
         const resolve = finalResolveRef.current
         finalResolveRef.current = null
@@ -234,6 +245,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
       // 添加短暂延迟让 MediaRecorder 预热,避免丢失开头
       await new Promise(resolve => setTimeout(resolve, 100))
       recorder.start(100)  // 每100ms收集一次数据
+      console.log('[Whisper] Recording started')
       recorderRef.current = recorder
       setIsRecording(true)
     } catch (e: any) {
