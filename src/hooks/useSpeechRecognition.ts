@@ -231,7 +231,9 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     }
 
     try {
-      recorder.start()
+      // 添加短暂延迟让 MediaRecorder 预热,避免丢失开头
+      await new Promise(resolve => setTimeout(resolve, 100))
+      recorder.start(100)  // 每100ms收集一次数据
       recorderRef.current = recorder
       setIsRecording(true)
     } catch (e: any) {

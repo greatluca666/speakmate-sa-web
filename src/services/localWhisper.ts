@@ -24,9 +24,10 @@ async function getWhisperPipeline(
     transformers.env.allowRemoteModels = true
     transformers.env.useBrowserCache = true
 
+    // 使用 base 模型替代 tiny,准确率更高
     const pipe: Pipeline = await transformers.pipeline(
       'automatic-speech-recognition',
-      'Xenova/whisper-tiny.en',
+      'Xenova/whisper-base.en',
       {
         progress_callback: (data: any) => {
           if (typeof data.progress === 'number') {
@@ -95,11 +96,17 @@ export async function transcribeLocal(
 ): Promise<string> {
   const pipe = await getWhisperPipeline(onProgress)
   const samples = await blobToFloat32Mono16k(audio)
-  if (samples.length < 16000 * 0.2) return ''
+  
+  // 降低最小长度要求,避免丢失短语音
+  if (samples.length < 16000 * 0.1) return ''
+  
   const result = await pipe(samples, {
     chunk_length_s: 30,
-    return_timestamps: false
+    return_timestamps: false,
+    // 添加语言提示提高准确率
+    language: 'english'
   })
+  
   if (Array.isArray(result)) {
     return result.map((r: any) => r.text || '').join(' ').trim()
   }
