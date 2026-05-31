@@ -63,6 +63,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const isStoppingRef = useRef(false)
 
   const useWhisper = isIOS
 
@@ -161,6 +162,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
     setError(null)
     setTranscript('')
     transcriptRef.current = ''
+    isStoppingRef.current = false
 
     let stream: MediaStream
     try {
@@ -199,11 +201,14 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
 
       if (blob.size < 200) {
         setIsRecording(false)
-        finalResolveRef.current?.('')
+        setIsProcessing(false)
+        const resolve = finalResolveRef.current
         finalResolveRef.current = null
+        resolve?.('')
         return
       }
 
+      setIsRecording(false)
       setIsProcessing(true)
       try {
         const text = await transcribeLocal(blob, (pct) => {
@@ -211,13 +216,16 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
         })
         transcriptRef.current = text
         setTranscript(text)
-        finalResolveRef.current?.(text)
+
+        const resolve = finalResolveRef.current
+        finalResolveRef.current = null
+        resolve?.(text)
       } catch (e: any) {
         setError('识别失败: ' + (e?.message || 'unknown'))
-        finalResolveRef.current?.('')
-      } finally {
+        const resolve = finalResolveRef.current
         finalResolveRef.current = null
-        setIsRecording(false)
+        resolve?.('')
+      } finally {
         setIsProcessing(false)
       }
     }
@@ -241,18 +249,30 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
   }
 
   function stop(): Promise<string> {
+    if (isStoppingRef.current) {
+      return Promise.resolve(transcriptRef.current)
+    }
+
+    isStoppingRef.current = true
+
     return new Promise((resolve) => {
-      finalResolveRef.current = resolve
+      finalResolveRef.current = (text: string) => {
+        isStoppingRef.current = false
+        resolve(text)
+      }
 
       if (useWhisper) {
         if (recorderRef.current && recorderRef.current.state === 'recording') {
           try {
             recorderRef.current.stop()
-          } catch {
+          } catch (e) {
+            console.error('Stop recorder error:', e)
+            isStoppingRef.current = false
             resolve(transcriptRef.current)
             finalResolveRef.current = null
           }
         } else {
+          isStoppingRef.current = false
           resolve(transcriptRef.current)
           finalResolveRef.current = null
         }
@@ -260,11 +280,14 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
         if (recognitionRef.current) {
           try {
             recognitionRef.current.stop()
-          } catch {
+          } catch (e) {
+            console.error('Stop recognition error:', e)
+            isStoppingRef.current = false
             resolve(transcriptRef.current)
             finalResolveRef.current = null
           }
         } else {
+          isStoppingRef.current = false
           resolve(transcriptRef.current)
           finalResolveRef.current = null
         }
