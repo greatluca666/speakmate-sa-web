@@ -29,7 +29,7 @@ async function getWhisperPipeline(
     // 使用 base 模型替代 tiny,准确率更高
     const pipe: Pipeline = await transformers.pipeline(
       'automatic-speech-recognition',
-      'Xenova/whisper-base.en',
+      'Xenova/whisper-tiny.en',
       {
         progress_callback: (data: any) => {
           if (typeof data.progress === 'number') {
@@ -53,13 +53,20 @@ async function getWhisperPipeline(
 }
 
 async function blobToFloat32Mono16k(blob: Blob): Promise<Float32Array> {
+  console.log('[Whisper Model] blobToFloat32Mono16k: blob size=', blob.size, 'type=', blob.type)
   const buffer = await blob.arrayBuffer()
+  console.log('[Whisper Model] ArrayBuffer created, byteLength=', buffer.byteLength)
+  
   const Ctor = (window as any).AudioContext || (window as any).webkitAudioContext
   const ac = new Ctor({ sampleRate: 16000 })
+  console.log('[Whisper Model] AudioContext created')
+  
   try {
+    console.log('[Whisper Model] Starting decodeAudioData...')
     const audioBuffer: AudioBuffer = await new Promise((resolve, reject) =>
       ac.decodeAudioData(buffer.slice(0), resolve, reject)
     )
+    console.log('[Whisper Model] Audio decoded successfully, duration=', audioBuffer.duration)
     const channels = audioBuffer.numberOfChannels
     const length = audioBuffer.length
     const mono = new Float32Array(length)
