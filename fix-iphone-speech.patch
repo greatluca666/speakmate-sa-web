@@ -1,0 +1,107 @@
+--- a/src/hooks/useSpeechRecognition.ts
++++ b/src/hooks/useSpeechRecognition.ts
+@@ -64,6 +64,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
+   const recorderRef = useRef<MediaRecorder | null>(null)
+   const streamRef = useRef<MediaStream | null>(null)
+   const chunksRef = useRef<Blob[]>([])
++  const isStoppingRef = useRef(false)
+ 
+   const useWhisper = isIOS
+ 
+@@ -167,6 +168,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
+     setError(null)
+     setTranscript('')
+     transcriptRef.current = ''
++    isStoppingRef.current = false
+ 
+     let stream: MediaStream
+     try {
+@@ -203,6 +205,8 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
+       chunksRef.current = []
+ 
+       if (blob.size < 200) {
++        setIsRecording(false)
++        setIsProcessing(false)
+-        setIsRecording(false)
++        const resolve = finalResolveRef.current
+         finalResolveRef.current = null
+-        finalResolveRef.current?.('')
++        resolve?.('')
+         return
+       }
+ 
++      setIsRecording(false)
+       setIsProcessing(true)
++
+       try {
+         const text = await transcribeLocal(blob, (pct) => {
+           setModelLoadingProgress(pct)
+         })
+         transcriptRef.current = text
+         setTranscript(text)
+-        finalResolveRef.current?.(text)
++
++        const resolve = finalResolveRef.current
++        finalResolveRef.current = null
++        resolve?.(text)
+       } catch (e: any) {
+         setError('识别失败: ' + (e?.message || 'unknown'))
+-        finalResolveRef.current?.('')
++        const resolve = finalResolveRef.current
++        finalResolveRef.current = null
++        resolve?.('')
+       } finally {
+-        finalResolveRef.current = null
+-        setIsRecording(false)
+         setIsProcessing(false)
+       }
+     }
+@@ -249,8 +257,15 @@ export function useSpeechRecognition(): UseSpeechRecognitionResult {
+   }
+ 
+   function stop(): Promise<string> {
++    if (isStoppingRef.current) {
++      return Promise.resolve(transcriptRef.current)
++    }
++
++    isStoppingRef.current = true
++
+     return new Promise((resolve) => {
+-      finalResolveRef.current = resolve
++      finalResolveRef.current = (text: string) => {
++        isStoppingRef.current = false
++        resolve(text)
++      }
+ 
+       if (useWhisper) {
+         if (recorderRef.current && recorderRef.current.state === 'recording') {
+           try {
+             recorderRef.current.stop()
+-          } catch {
++          } catch (e) {
++            console.error('Stop recorder error:', e)
++            isStoppingRef.current = false
+             resolve(transcriptRef.current)
+             finalResolveRef.current = null
+           }
+         } else {
++          isStoppingRef.current = false
+           resolve(transcriptRef.current)
+           finalResolveRef.current = null
+         }
+       } else {
+         if (recognitionRef.current) {
+           try {
+             recognitionRef.current.stop()
+-          } catch {
++          } catch (e) {
++            console.error('Stop recognition error:', e)
++            isStoppingRef.current = false
+             resolve(transcriptRef.current)
+             finalResolveRef.current = null
+           }
+         } else {
++          isStoppingRef.current = false
+           resolve(transcriptRef.current)
+           finalResolveRef.current = null
+         }

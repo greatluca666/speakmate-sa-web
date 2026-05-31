@@ -1,0 +1,294 @@
+import { useEffect, useRef, useState } from 'react'
+import { transcribeLocal, getLocalWhisperStatus } from '../services/localWhisper'
+
+interface UseSpeechRecognitionResult {
+  transcript: string
+  isRecording: boolean
+  isProcessing: boolean
+  isSupported: boolean
+  modelLoadingProgress: number
+  error: string | null
+  start: () => Promise<void>
+  stop: () => Promise<string>
+  reset: () => void
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: any
+    webkitSpeechRecognition?: any
+  }
+}
+
+const isIOS =
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1))
+
+function pickMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined') return undefined
+  const candidates = [
+    'audio/mp4',
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus'
+  ]
+  for (const t of candidates) {
+    if (MediaRecorder.isTypeSupported(t)) return t
+  }
+  return undefined
+}
+
+async function ensureMicStream(): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('getUserMedia not available (need HTTPS)')
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: true })
+}
+
+export function useSpeechRecognition(): UseSpeechRecognitionResult {
+  const [transcript, setTranscript] = useState('')
+  const [isRecording, setIsRecording] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [modelLoadingProgress, setModelLoadingProgress] = useState(
+    () => getLocalWhisperStatus().progress
+  )
+  const [error, setError] = useState<string | null>(null)
+
+  const recognitionRef = useRef<any>(null)
+  const transcriptRef = useRef('')
+  const finalResolveRef = useRef<((text: string) => void) | null>(null)
+
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+
+  const useWhisper = isIOS
+  const isStoppingRef = useRef(false)
+
+  const WebSpeechCtor =
+    typeof window !== 'undefined'
+      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      : undefined
+  const webSpeechSupported = !!WebSpeechCtor
+  const mediaRecorderSupported = typeof MediaRecorder !== 'undefined'
+  const isSupported = useWhisper ? mediaRecorderSupported : webSpeechSupported
+
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.stop()
+      } catch {
+        // ignore
+      }
+      try {
+        if (recorderRef.current?.state === 'recording') {
+          recorderRef.current.stop()
+        }
+      } catch {
+        // ignore
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
+
+  async function startWebSpeech() {
+    setError(null)
+    setTranscript('')
+    transcriptRef.current = ''
+
+    try {
+      const probe = await ensureMicStream()
+      probe.getTracks().forEach((t) => t.stop())
+    } catch (e: any) {
+      setError('麦克风权限被拒绝: ' + (e?.message || 'unknown'))
+      return
+    }
+
+    const recognition = new WebSpeechCtor()
+    recognition.lang = 'en-ZA'
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.maxAlternatives = 1
+
+    recognition.onresult = (event: any) => {
+      let interim = ''
+      let finalText = transcriptRef.current
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i]
+        if (result.isFinal) {
+          finalText += result[0].transcript
+        } else {
+          interim += result[0].transcript
+        }
+      }
+      transcriptRef.current = finalText
+      setTranscript(finalText + interim)
+    }
+
+    recognition.onerror = (event: any) => {
+      const err = event.error || '识别失败'
+      if (err === 'no-speech' || err === 'aborted') {
+        setIsRecording(false)
+        finalResolveRef.current?.(transcriptRef.current)
+        finalResolveRef.current = null
+        return
+      }
+      setError(err)
+      setIsRecording(false)
+      finalResolveRef.current?.(transcriptRef.current)
+      finalResolveRef.current = null
+    }
+
+    recognition.onend = () => {
+      setIsRecording(false)
+      setTranscript(transcriptRef.current)
+      finalResolveRef.current?.(transcriptRef.current)
+      finalResolveRef.current = null
+    }
+
+    try {
+      recognition.start()
+      recognitionRef.current = recognition
+      setIsRecording(true)
+    } catch (e: any) {
+      setError(e?.message || '启动识别失败')
+      setIsRecording(false)
+    }
+  }
+
+  async function startWhisper() {
+    setError(null)
+    setTranscript('')
+    transcriptRef.current = ''
+
+    let stream: MediaStream
+    try {
+      stream = await ensureMicStream()
+    } catch (e: any) {
+      setError('麦克风权限被拒绝: ' + (e?.message || 'unknown'))
+      return
+    isStoppingRef.current = false
+    }
+    streamRef.current = stream
+
+    const mimeType = pickMimeType()
+    let recorder: MediaRecorder
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
+    } catch (e: any) {
+      stream.getTracks().forEach((t) => t.stop())
+      setError('无法创建录音器: ' + (e?.message || 'unknown'))
+      return
+    }
+
+    chunksRef.current = []
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
+    }
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+
+      const blob = new Blob(chunksRef.current, {
+        type: recorder.mimeType || 'audio/webm'
+      })
+      chunksRef.current = []
+
+      if (blob.size < 200) {
+        setIsRecording(false)
+        finalResolveRef.current?.('')
+        finalResolveRef.current = null
+        return
+      }
+
+      setIsProcessing(true)
+      try {
+        const text = await transcribeLocal(blob, (pct) => {
+          setModelLoadingProgress(pct)
+        })
+        transcriptRef.current = text
+        setTranscript(text)
+        finalResolveRef.current?.(text)
+      } catch (e: any) {
+        setError('识别失败: ' + (e?.message || 'unknown'))
+        finalResolveRef.current?.('')
+      } finally {
+        finalResolveRef.current = null
+        setIsRecording(false)
+        setIsProcessing(false)
+      }
+    }
+
+    try {
+      recorder.start()
+      recorderRef.current = recorder
+      setIsRecording(true)
+    } catch (e: any) {
+      stream.getTracks().forEach((t) => t.stop())
+      setError(e?.message || '启动录音失败')
+    }
+  }
+
+  async function start() {
+    if (useWhisper) {
+      await startWhisper()
+    } else {
+      await startWebSpeech()
+    }
+  }
+
+  function stop(): Promise<string> {
+    return new Promise((resolve) => {
+      finalResolveRef.current = resolve
+
+      if (useWhisper) {
+        if (recorderRef.current && recorderRef.current.state === 'recording') {
+          try {
+            recorderRef.current.stop()
+          } catch {
+            resolve(transcriptRef.current)
+            finalResolveRef.current = null
+          }
+        } else {
+          resolve(transcriptRef.current)
+          finalResolveRef.current = null
+        }
+      } else {
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.stop()
+          } catch {
+            resolve(transcriptRef.current)
+            finalResolveRef.current = null
+          }
+        } else {
+          resolve(transcriptRef.current)
+          finalResolveRef.current = null
+        }
+      }
+    })
+  }
+
+  function reset() {
+    setTranscript('')
+    transcriptRef.current = ''
+    setError(null)
+  }
+
+  return {
+    transcript,
+    isRecording,
+    isProcessing,
+    isSupported,
+    modelLoadingProgress,
+    error,
+    start,
+    stop,
+    reset
+  }
+}

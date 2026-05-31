@@ -173,15 +173,15 @@ export function ChatView({ scenario, onExit }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <header className="flex items-center justify-between p-3 border-b safe-top">
-        <button onClick={onExit} className="text-blue-500 text-sm">← 返回</button>
-        <div className="font-medium">{scenario?.titleZh || '自由对话'}</div>
-        <span className="text-xs px-2 py-1 bg-gray-100 rounded-full">
+      <header className="flex items-center justify-between p-4 glass border-b border-gray-200/50 safe-top shadow-sm">
+        <button onClick={onExit} className="text-blue-600 text-sm font-medium btn-press hover:text-blue-700 transition-colors">← 返回</button>
+        <div className="font-semibold text-lg text-gray-800">{scenario?.titleZh || '自由对话'}</div>
+        <span className="text-xs px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full font-medium">
           {LEVEL_DISPLAY[settings.userLevel]}
         </span>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 smooth-scroll">
         {!settingsReady && (
           <div className="text-center text-sm text-gray-500 py-8">
             请在"我的"标签里填写 API 设置后再开始对话
@@ -201,17 +201,17 @@ export function ChatView({ scenario, onExit }: Props) {
           </div>
         ))}
         {isLoading && (
-          <div className="flex items-center gap-2 text-gray-500 text-sm">
-            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+          <div className="flex items-center gap-2 text-gray-600 text-sm">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
           </div>
         )}
         {error && (
-          <div className="text-red-500 text-xs p-2 bg-red-50 rounded">{error}</div>
+          <div className="text-red-600 text-sm p-3 bg-red-50 rounded-xl border border-red-100">{error}</div>
         )}
         {speech.isProcessing && (
-          <div className="text-right text-sm text-gray-500 italic">
+          <div className="text-right text-sm text-blue-600 font-medium">
             {speech.modelLoadingProgress > 0 && speech.modelLoadingProgress < 100
               ? `首次加载语音识别模型 ${speech.modelLoadingProgress}%...`
               : '正在识别...'}
@@ -224,9 +224,9 @@ export function ChatView({ scenario, onExit }: Props) {
         )}
       </div>
 
-      <div className="p-4 border-t safe-bottom flex flex-col items-center gap-1">
+      <div className="p-6 glass border-t border-gray-200/50 safe-bottom flex flex-col items-center gap-2 shadow-lg">
         {!speech.isSupported && (
-          <div className="text-xs text-red-500 mb-2">
+          <div className="text-sm text-red-600 mb-3 font-medium">
             当前浏览器不支持语音识别，请用 Safari/Chrome
           </div>
         )}
